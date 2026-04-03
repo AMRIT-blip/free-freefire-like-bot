@@ -140,7 +140,7 @@ class LikeCommands(commands.Cog):
                     )
 
                     embed.set_thumbnail(
-                        url="https://i.imgur.com/4M34hi2.png"
+                        url="https://i.imgur.com/WEZ0Pbk.png"
                     )
 
                     embed.set_footer(
