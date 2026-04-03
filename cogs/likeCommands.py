@@ -19,9 +19,6 @@ class LikeCommands(commands.Cog):
         self.cooldowns = {}
         self.session = aiohttp.ClientSession()
 
-        # ✅ register slash command
-        self.bot.tree.add_command(self.setchannel)
-
     def load_config(self):
         default_config = {
             "servers": {}
@@ -38,10 +35,6 @@ class LikeCommands(commands.Cog):
 
         return default_config
 
-    def save_config(self):
-        with open(CONFIG_FILE, "w") as f:
-            json.dump(self.config_data, f, indent=4)
-
     async def check_channel(self, ctx):
         if ctx.guild is None:
             return True
@@ -51,25 +44,6 @@ class LikeCommands(commands.Cog):
 
         return not like_channels or str(ctx.channel.id) in like_channels
 
-    # ✅ SET CHANNEL COMMAND
-    @app_commands.command(name="setchannel", description="Set like command channel")
-    async def setchannel(self, interaction: discord.Interaction):
-
-        guild_id = str(interaction.guild.id)
-        channel_id = str(interaction.channel.id)
-
-        if guild_id not in self.config_data["servers"]:
-            self.config_data["servers"][guild_id] = {}
-
-        self.config_data["servers"][guild_id]["like_channels"] = [channel_id]
-        self.save_config()
-
-        await interaction.response.send_message(
-            f"✅ Channel set! Ab bot sirf <#{channel_id}> me chalega",
-            ephemeral=True
-        )
-
-    # ✅ LIKE COMMAND
     @commands.hybrid_command(name="like", description="Send Free Fire Likes")
     async def like_command(self, ctx: commands.Context, uid: str):
 
@@ -77,7 +51,7 @@ class LikeCommands(commands.Cog):
 
         if not await self.check_channel(ctx):
             await ctx.reply(
-                "❌ This command not allowed in this channel",
+                "This command not allowed in this channel",
                 ephemeral=is_slash
             )
             return
@@ -100,7 +74,7 @@ class LikeCommands(commands.Cog):
 
         if not uid.isdigit():
             await ctx.reply(
-                "❌ Invalid UID",
+                "Invalid UID",
                 ephemeral=is_slash
             )
             return
@@ -112,7 +86,7 @@ class LikeCommands(commands.Cog):
                 ) as response:
 
                     if response.status != 200:
-                        await ctx.reply("❌ API Error")
+                        await ctx.reply("API Error")
                         return
 
                     data = await response.json()
@@ -169,10 +143,12 @@ class LikeCommands(commands.Cog):
                         url="https://i.imgur.com/WEZ0Pbk.png"
                     )
 
+                    # Footer GIF
                     embed.set_image(
                         url="https://i.imgur.com/k51P473.gif"
                     )
 
+                    # Footer Text Only
                     embed.set_footer(
                         text="Developed by SpectraX-Community"
                     )
@@ -184,7 +160,7 @@ class LikeCommands(commands.Cog):
 
         except Exception as e:
             print(e)
-            await ctx.reply("❌ Error occurred")
+            await ctx.reply("Error occurred")
 
     def cog_unload(self):
         self.bot.loop.create_task(
