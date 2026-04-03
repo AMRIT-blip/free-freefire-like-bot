@@ -9,100 +9,30 @@ import asyncio
 from dotenv import load_dotenv
 
 load_dotenv()
-CONFIG_FILE = "like_channels.json"
 
 class LikeCommands(commands.Cog):
+
+    # Allowed Server & Channel
+    ALLOWED_SERVER_ID = 1320706753490452520
+    ALLOWED_CHANNEL_ID = 1489714786483830836
+
     def __init__(self, bot):
         self.bot = bot
         self.api_host = "https://free-fire-like-api-bay.vercel.app"
-        self.config_data = self.load_config()
         self.cooldowns = {}
         self.session = aiohttp.ClientSession()
 
-    def load_config(self):
-        default_config = {
-            "servers": {}
-        }
-
-        if os.path.exists(CONFIG_FILE):
-            try:
-                with open(CONFIG_FILE, 'r') as f:
-                    loaded_config = json.load(f)
-                    loaded_config.setdefault("servers", {})
-                    return loaded_config
-            except:
-                pass
-
-        return default_config
-
     async def check_channel(self, ctx):
         if ctx.guild is None:
-            return True
+            return False
 
-        guild_id = str(ctx.guild.id)
-        like_channels = self.config_data["servers"].get(guild_id, {}).get("like_channels", [])
+        if ctx.guild.id != self.ALLOWED_SERVER_ID:
+            return False
 
-        return not like_channels or str(ctx.channel.id) in like_channels
+        if ctx.channel.id != self.ALLOWED_CHANNEL_ID:
+            return False
 
-
-    @commands.hybrid_command(name="setchannel", description="Set Like Command Channel")
-    @commands.has_permissions(administrator=True)
-    async def set_channel(self, ctx, channel: discord.TextChannel):
-
-        guild_id = str(ctx.guild.id)
-
-        if guild_id not in self.config_data["servers"]:
-            self.config_data["servers"][guild_id] = {
-                "like_channels": []
-            }
-
-        self.config_data["servers"][guild_id]["like_channels"] = [str(channel.id)]
-
-        with open(CONFIG_FILE, "w") as f:
-            json.dump(self.config_data, f, indent=4)
-
-        await ctx.reply(
-            f"✅ Like command set to {channel.mention}"
-        )
-
-
-    @commands.hybrid_command(name="removechannel", description="Remove Like Channel")
-    @commands.has_permissions(administrator=True)
-    async def remove_channel(self, ctx):
-
-        guild_id = str(ctx.guild.id)
-
-        if guild_id in self.config_data["servers"]:
-            self.config_data["servers"][guild_id]["like_channels"] = []
-
-            with open(CONFIG_FILE, "w") as f:
-                json.dump(self.config_data, f, indent=4)
-
-        await ctx.reply(
-            "✅ Channel restriction removed"
-        )
-
-
-    @commands.hybrid_command(name="listchannels", description="Show Allowed Channels")
-    async def list_channels(self, ctx):
-
-        guild_id = str(ctx.guild.id)
-
-        channels = self.config_data["servers"].get(
-            guild_id, {}
-        ).get("like_channels", [])
-
-        if not channels:
-            await ctx.reply(
-                "No channels set"
-            )
-            return
-
-        mentions = [f"<#{c}>" for c in channels]
-
-        await ctx.reply(
-            "Allowed Channels:\n" + "\n".join(mentions)
-        )
+        return True
 
 
     @commands.hybrid_command(name="like", description="Send Free Fire Likes")
@@ -112,7 +42,7 @@ class LikeCommands(commands.Cog):
 
         if not await self.check_channel(ctx):
             await ctx.reply(
-                "This command not allowed in this channel",
+                "⚠️ This command only works in official SpectraX channel",
                 ephemeral=is_slash
             )
             return
