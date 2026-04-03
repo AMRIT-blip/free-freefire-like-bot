@@ -143,9 +143,14 @@ class LikeCommands(commands.Cog):
                         url="https://i.imgur.com/WEZ0Pbk.png"
                     )
 
+                    # Footer GIF
+                    embed.set_image(
+                        url="https://i.imgur.com/WEZ0Pbk.gif"
+                    )
+
+                    # Footer Text Only
                     embed.set_footer(
-                        text="Developed By SpectraX Community",
-                        icon_url="https://i.imgur.com/WEZ0Pbk.png"
+                        text="Developed by SpectraX-Community"
                     )
 
                     await ctx.reply(
