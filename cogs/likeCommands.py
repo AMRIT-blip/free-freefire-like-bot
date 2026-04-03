@@ -161,7 +161,7 @@ class LikeCommands(commands.Cog):
                     )
 
                     embed.set_image(
-                        url="https://i.imgur.com/WEZ0Pbk.gif"
+                        url="https://i.imgur.com/oGVQjXn.gif"
                     )
 
                     embed.set_footer(
