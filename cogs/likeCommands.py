@@ -11,10 +11,6 @@ from dotenv import load_dotenv
 load_dotenv()
 CONFIG_FILE = "like_channels.json"
 
-# ✅ TERA DATA ALREADY SET
-OWNER_ID = 1416943004018802812
-ALLOWED_GUILDS = ["1320706753490452520"]
-
 class LikeCommands(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
@@ -23,6 +19,7 @@ class LikeCommands(commands.Cog):
         self.cooldowns = {}
         self.session = aiohttp.ClientSession()
 
+        # ✅ register slash command
         self.bot.tree.add_command(self.setchannel)
 
     def load_config(self):
@@ -41,6 +38,10 @@ class LikeCommands(commands.Cog):
 
         return default_config
 
+    def save_config(self):
+        with open(CONFIG_FILE, "w") as f:
+            json.dump(self.config_data, f, indent=4)
+
     async def check_channel(self, ctx):
         if ctx.guild is None:
             return True
@@ -50,22 +51,9 @@ class LikeCommands(commands.Cog):
 
         return not like_channels or str(ctx.channel.id) in like_channels
 
-    # 🔒 AUTO LEAVE UNKNOWN SERVER
-    @commands.Cog.listener()
-    async def on_guild_join(self, guild):
-        if str(guild.id) not in ALLOWED_GUILDS:
-            await guild.leave()
-
-    # ✅ SET CHANNEL (OWNER ONLY)
+    # ✅ SET CHANNEL COMMAND
     @app_commands.command(name="setchannel", description="Set like command channel")
     async def setchannel(self, interaction: discord.Interaction):
-
-        if interaction.user.id != OWNER_ID:
-            await interaction.response.send_message(
-                "❌ Tum is command ko use nahi kar sakte",
-                ephemeral=True
-            )
-            return
 
         guild_id = str(interaction.guild.id)
         channel_id = str(interaction.channel.id)
@@ -74,9 +62,7 @@ class LikeCommands(commands.Cog):
             self.config_data["servers"][guild_id] = {}
 
         self.config_data["servers"][guild_id]["like_channels"] = [channel_id]
-
-        with open(CONFIG_FILE, "w") as f:
-            json.dump(self.config_data, f, indent=4)
+        self.save_config()
 
         await interaction.response.send_message(
             f"✅ Channel set! Ab bot sirf <#{channel_id}> me chalega",
@@ -89,12 +75,6 @@ class LikeCommands(commands.Cog):
 
         is_slash = ctx.interaction is not None
 
-        # 🔒 SERVER RESTRICT
-        if ctx.guild and str(ctx.guild.id) not in ALLOWED_GUILDS:
-            await ctx.reply("❌ Not allowed in this server", ephemeral=is_slash)
-            return
-
-        # 🔒 CHANNEL RESTRICT
         if not await self.check_channel(ctx):
             await ctx.reply(
                 "❌ This command not allowed in this channel",
