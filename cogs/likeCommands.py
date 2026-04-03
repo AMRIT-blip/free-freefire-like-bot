@@ -145,7 +145,7 @@ class LikeCommands(commands.Cog):
 
                     # Footer GIF
                     embed.set_image(
-                        url="https://i.imgur.com/k51P473.gif"
+                        url="https://i.imgur.com/WEZ0Pbk.gif"
                     )
 
                     # Footer Text Only
