@@ -136,7 +136,7 @@ class LikeCommands(commands.Cog):
                         )
 
                     embed.set_footer(
-                        text="Developed By Thug"
+                        text="Developed By SpectraX-Community"
                     )
 
                     await ctx.reply(
