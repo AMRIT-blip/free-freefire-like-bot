@@ -1,10 +1,7 @@
 import discord
 from discord.ext import commands
-from discord import app_commands
 import aiohttp
 from datetime import datetime
-import json
-import os
 import asyncio
 from dotenv import load_dotenv
 
@@ -82,6 +79,35 @@ class LikeCommands(commands.Cog):
 
                     data = await response.json()
 
+                    likes_added = data.get("LikesGivenByAPI", 0)
+
+                    # Maximum Likes Reached
+                    if likes_added == 0:
+                        embed = discord.Embed(
+                            title="⚠️ SpectraX | Maximum Likes Reached",
+                            description="This UID has already received maximum likes for today.",
+                            color=0xff4757,
+                            timestamp=datetime.now()
+                        )
+
+                        embed.add_field(
+                            name="✦ Player UID",
+                            value=f"`{uid}`",
+                            inline=False
+                        )
+
+                        embed.set_image(
+                            url="https://i.imgur.com/WEZ0Pbk.gif"
+                        )
+
+                        embed.set_footer(
+                            text="Developed by SpectraX-Community"
+                        )
+
+                        await ctx.reply(embed=embed)
+                        return
+
+                    # Success Embed
                     embed = discord.Embed(
                         title="⚡ SpectraX | Likes Sent ⚡",
                         color=0x6c5ce7,
