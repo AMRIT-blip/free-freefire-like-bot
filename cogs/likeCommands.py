@@ -6,9 +6,7 @@ from datetime import datetime
 import json
 import os
 import asyncio
-from dotenv import load_dotenv
 
-load_dotenv()
 CONFIG_FILE = "like_channels.json"
 
 class LikeCommands(commands.Cog):
@@ -20,16 +18,12 @@ class LikeCommands(commands.Cog):
         self.session = aiohttp.ClientSession()
 
     def load_config(self):
-        default_config = {
-            "servers": {}
-        }
+        default_config = {"servers": {}}
 
         if os.path.exists(CONFIG_FILE):
             try:
                 with open(CONFIG_FILE, 'r') as f:
-                    loaded_config = json.load(f)
-                    loaded_config.setdefault("servers", {})
-                    return loaded_config
+                    return json.load(f)
             except:
                 pass
 
@@ -51,7 +45,7 @@ class LikeCommands(commands.Cog):
 
         if not await self.check_channel(ctx):
             await ctx.reply(
-                "This command not allowed in this channel",
+                "❌ Command not allowed here",
                 ephemeral=is_slash
             )
             return
@@ -65,19 +59,12 @@ class LikeCommands(commands.Cog):
 
             if remaining > 0:
                 await ctx.reply(
-                    f"⏳ Wait {remaining}s",
+                    f"⏳ Wait **{remaining}s** before using again",
                     ephemeral=is_slash
                 )
                 return
 
         self.cooldowns[user_id] = datetime.now()
-
-        if not uid.isdigit():
-            await ctx.reply(
-                "Invalid UID",
-                ephemeral=is_slash
-            )
-            return
 
         try:
             async with ctx.typing():
@@ -86,56 +73,41 @@ class LikeCommands(commands.Cog):
                 ) as response:
 
                     if response.status != 200:
-                        await ctx.reply("API Error")
+                        await ctx.reply("⚠ API Error")
                         return
 
                     data = await response.json()
 
                     embed = discord.Embed(
-                        title="⚡ SpectraX | Likes Sent ⚡",
-                        color=0x6c5ce7,
+                        title="✨⚡ 𝗦𝗣𝗘𝗖𝗧𝗥𝗔𝗫 𝗟𝗜𝗞𝗘𝗦 𝗦𝗘𝗡𝗧 ⚡✨",
+                        description="💎 **Free Fire Auto Like System Activated**",
+                        color=0x8A2BE2,
                         timestamp=datetime.now()
                     )
 
                     embed.add_field(
-                        name="✦ Nickname",
-                        value=f"`{data.get('PlayerNickname','Unknown')}`",
-                        inline=True
-                    )
-
-                    embed.add_field(
-                        name="✦ Region",
-                        value=f"`{data.get('Region','IND')}`",
-                        inline=True
-                    )
-
-                    embed.add_field(
-                        name="✦ Player UID",
-                        value=f"`{data.get('UID')}`",
+                        name="👤 𝗣𝗟𝗔𝗬𝗘𝗥 𝗜𝗡𝗙𝗢",
+                        value=(
+                            f"✦ **Nickname :** `{data.get('PlayerNickname','Unknown')}`\n"
+                            f"✦ **UID :** `{data.get('UID')}`\n"
+                            f"✦ **Region :** `{data.get('Region')}`"
+                        ),
                         inline=False
                     )
 
                     embed.add_field(
-                        name="✦ Like Before",
-                        value=f"`{data.get('LikesbeforeCommand')}`",
-                        inline=True
+                        name="💖 𝗟𝗜𝗞𝗘 𝗥𝗘𝗦𝗨𝗟𝗧",
+                        value=(
+                            f"✦ **Before :** `{data.get('LikesbeforeCommand')}`\n"
+                            f"✦ **Added :** `+{data.get('LikesGivenByAPI')}`\n"
+                            f"✦ **After :** `{data.get('LikesafterCommand')}`"
+                        ),
+                        inline=False
                     )
 
                     embed.add_field(
-                        name="✦ Likes Added",
-                        value=f"`+{data.get('LikesGivenByAPI')}`",
-                        inline=True
-                    )
-
-                    embed.add_field(
-                        name="✦ Like After",
-                        value=f"`{data.get('LikesafterCommand')}`",
-                        inline=True
-                    )
-
-                    embed.add_field(
-                        name="✦ Requests Remaining",
-                        value="`Unlimited`",
+                        name="⚡ 𝗦𝗧𝗔𝗧𝗨𝗦",
+                        value="`Unlimited Requests Available`",
                         inline=False
                     )
 
@@ -143,8 +115,12 @@ class LikeCommands(commands.Cog):
                         url="https://i.imgur.com/4M34hi2.png"
                     )
 
+                    embed.set_image(
+                        url="https://i.imgur.com/mYhG7zE.png"
+                    )
+
                     embed.set_footer(
-                        text="Developed By SpectraX Community",
+                        text="✨ Developed By SpectraX Community",
                         icon_url="https://i.imgur.com/4M34hi2.png"
                     )
 
@@ -155,12 +131,11 @@ class LikeCommands(commands.Cog):
 
         except Exception as e:
             print(e)
-            await ctx.reply("Error occurred")
+            await ctx.reply("⚠ Error Occurred")
 
     def cog_unload(self):
-        self.bot.loop.create_task(
-            self.session.close()
-        )
+        self.bot.loop.create_task(self.session.close())
+
 
 async def setup(bot):
     await bot.add_cog(LikeCommands(bot))
