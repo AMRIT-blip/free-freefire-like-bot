@@ -9,7 +9,6 @@ import asyncio
 from dotenv import load_dotenv
 
 load_dotenv()
-RAPIDAPI_KEY = os.getenv("RAPIDAPI_KEY")
 CONFIG_FILE = "like_channels.json"
 
 class LikeCommands(commands.Cog):
@@ -20,51 +19,39 @@ class LikeCommands(commands.Cog):
         self.cooldowns = {}
         self.session = aiohttp.ClientSession()
 
-        self.headers = {}
-        if RAPIDAPI_KEY:
-            self.headers = {
-                'x-rapidapi-key': RAPIDAPI_KEY,
-                'x-rapidapi-host': "free-fire-like1.p.rapidapi.com"
-            }
-
     def load_config(self):
         default_config = {
             "servers": {}
         }
+
         if os.path.exists(CONFIG_FILE):
             try:
                 with open(CONFIG_FILE, 'r') as f:
                     loaded_config = json.load(f)
                     loaded_config.setdefault("servers", {})
                     return loaded_config
-            except json.JSONDecodeError:
-                print(f"WARNING: '{CONFIG_FILE}' corrupt. Resetting.")
-        self.save_config(default_config)
-        return default_config
+            except:
+                pass
 
-    def save_config(self, config_to_save=None):
-        data_to_save = config_to_save if config_to_save else self.config_data
-        temp_file = CONFIG_FILE + ".tmp"
-        with open(temp_file, 'w') as f:
-            json.dump(data_to_save, f, indent=4)
-        os.replace(temp_file, CONFIG_FILE)
+        return default_config
 
     async def check_channel(self, ctx):
         if ctx.guild is None:
             return True
+
         guild_id = str(ctx.guild.id)
         like_channels = self.config_data["servers"].get(guild_id, {}).get("like_channels", [])
+
         return not like_channels or str(ctx.channel.id) in like_channels
 
-    @commands.hybrid_command(name="like", description="Send likes to Free Fire player")
-    @app_commands.describe(uid="Player UID")
+    @commands.hybrid_command(name="like", description="Send Free Fire Likes")
     async def like_command(self, ctx: commands.Context, uid: str):
 
         is_slash = ctx.interaction is not None
 
         if not await self.check_channel(ctx):
             await ctx.reply(
-                "This command is not allowed in this channel.",
+                "This command not allowed in this channel",
                 ephemeral=is_slash
             )
             return
@@ -75,18 +62,19 @@ class LikeCommands(commands.Cog):
         if user_id in self.cooldowns:
             last = self.cooldowns[user_id]
             remaining = cooldown - (datetime.now() - last).seconds
+
             if remaining > 0:
                 await ctx.reply(
-                    f"⏳ Wait {remaining}s before using again.",
+                    f"⏳ Wait {remaining}s",
                     ephemeral=is_slash
                 )
                 return
 
         self.cooldowns[user_id] = datetime.now()
 
-        if not uid.isdigit() or len(uid) < 6:
+        if not uid.isdigit():
             await ctx.reply(
-                "❌ Invalid UID",
+                "Invalid UID",
                 ephemeral=is_slash
             )
             return
@@ -97,46 +85,67 @@ class LikeCommands(commands.Cog):
                     f"{self.api_host}/like?uid={uid}"
                 ) as response:
 
-                    if response.status == 404:
-                        await self._send_player_not_found(ctx, uid)
-                        return
-
-                    if response.status == 429:
-                        await self._send_api_limit(ctx)
-                        return
-
                     if response.status != 200:
-                        await self._send_api_error(ctx)
+                        await ctx.reply("API Error")
                         return
 
                     data = await response.json()
 
                     embed = discord.Embed(
-                        title="🔥 FREE FIRE LIKE",
-                        color=0x00ffcc,
+                        title="⚡ SpectraX | Likes Sent ⚡",
+                        color=0x6c5ce7,
                         timestamp=datetime.now()
                     )
 
-                    if data.get("status") == 1:
+                    embed.add_field(
+                        name="✦ Nickname",
+                        value=f"`{data.get('PlayerNickname','Unknown')}`",
+                        inline=True
+                    )
 
-                        embed.description = (
-                            f"┌ ACCOUNT INFO\n"
-                            f"├ Nickname : {data.get('PlayerNickname')}\n"
-                            f"├ UID : {data.get('UID')}\n"
-                            f"├ Region : {data.get('Region')}\n"
-                            f"└ RESULT\n"
-                            f"   ├ Added : +{data.get('LikesGivenByAPI')}\n"
-                            f"   ├ Before : {data.get('LikesbeforeCommand')}\n"
-                            f"   └ After : {data.get('LikesafterCommand')}\n"
-                        )
+                    embed.add_field(
+                        name="✦ Region",
+                        value=f"`{data.get('Region','IND')}`",
+                        inline=True
+                    )
 
-                    else:
-                        embed.description = (
-                            "⚠️ Max likes reached for today"
-                        )
+                    embed.add_field(
+                        name="✦ Player UID",
+                        value=f"`{data.get('UID')}`",
+                        inline=False
+                    )
+
+                    embed.add_field(
+                        name="✦ Like Before",
+                        value=f"`{data.get('LikesbeforeCommand')}`",
+                        inline=True
+                    )
+
+                    embed.add_field(
+                        name="✦ Likes Added",
+                        value=f"`+{data.get('LikesGivenByAPI')}`",
+                        inline=True
+                    )
+
+                    embed.add_field(
+                        name="✦ Like After",
+                        value=f"`{data.get('LikesafterCommand')}`",
+                        inline=True
+                    )
+
+                    embed.add_field(
+                        name="✦ Requests Remaining",
+                        value="`Unlimited`",
+                        inline=False
+                    )
+
+                    embed.set_thumbnail(
+                        url="https://i.imgur.com/4M34hi2.png"
+                    )
 
                     embed.set_footer(
-                        text="Developed By SpectraX-Community"
+                        text="Developed By SpectraX Community",
+                        icon_url="https://i.imgur.com/4M34hi2.png"
                     )
 
                     await ctx.reply(
@@ -144,58 +153,14 @@ class LikeCommands(commands.Cog):
                         mention_author=False
                     )
 
-        except asyncio.TimeoutError:
-            await self._send_error(
-                ctx,
-                "Timeout",
-                "Server took too long"
-            )
-
         except Exception as e:
             print(e)
-            await self._send_error(
-                ctx,
-                "Error",
-                "Something went wrong"
-            )
-
-    async def _send_player_not_found(self, ctx, uid):
-        embed = discord.Embed(
-            title="❌ Player Not Found",
-            description=f"UID {uid} not found",
-            color=0xff0000
-        )
-        await ctx.reply(embed=embed)
-
-    async def _send_api_limit(self, ctx):
-        embed = discord.Embed(
-            title="⚠️ API Limit Reached",
-            description="Too many requests. Try later.",
-            color=0xff9900
-        )
-        await ctx.reply(embed=embed)
-
-    async def _send_api_error(self, ctx):
-        embed = discord.Embed(
-            title="⚠️ API Error",
-            description="Server not responding",
-            color=0xff0000
-        )
-        await ctx.reply(embed=embed)
-
-    async def _send_error(self, ctx, title, desc):
-        embed = discord.Embed(
-            title=title,
-            description=desc,
-            color=0xff0000
-        )
-        await ctx.reply(embed=embed)
+            await ctx.reply("Error occurred")
 
     def cog_unload(self):
         self.bot.loop.create_task(
             self.session.close()
         )
-
 
 async def setup(bot):
     await bot.add_cog(LikeCommands(bot))
