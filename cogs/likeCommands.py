@@ -1,212 +1,194 @@
 import discord
 from discord.ext import commands
+from discord import app_commands
 import aiohttp
 from datetime import datetime
+import json
+import os
 import asyncio
 from dotenv import load_dotenv
 
 load_dotenv()
+RAPIDAPI_KEY = os.getenv("RAPIDAPI_KEY")
+CONFIG_FILE = "like_channels.json"
 
 class LikeCommands(commands.Cog):
-
-    # Allowed Server & Channel
-    ALLOWED_SERVER_ID = 1320706753490452520
-    ALLOWED_CHANNEL_ID = 1489714786483830836
-
     def __init__(self, bot):
         self.bot = bot
-        self.api_host = "https://free-fire-like-api-bay.vercel.app"
+        self.api_host = "https://free-fire-like1.p.rapidapi.com"
+        self.config_data = self.load_config()
         self.cooldowns = {}
+        self.session = aiohttp.ClientSession()
 
-        self.session = aiohttp.ClientSession(
-            timeout=aiohttp.ClientTimeout(total=20),
-            headers={
-                "User-Agent": "Mozilla/5.0",
-                "Accept": "application/json"
+        self.headers = {}
+        if RAPIDAPI_KEY:
+            self.headers = {
+                'x-rapidapi-key': RAPIDAPI_KEY,
+                'x-rapidapi-host': "free-fire-like1.p.rapidapi.com"
             }
-        )
 
-
-    async def fetch_api(self, url):
-        for _ in range(3):
+    def load_config(self):
+        default_config = {
+            "servers": {}
+        }
+        if os.path.exists(CONFIG_FILE):
             try:
-                await asyncio.sleep(2)
+                with open(CONFIG_FILE, 'r') as f:
+                    loaded_config = json.load(f)
+                    loaded_config.setdefault("servers", {})
+                    return loaded_config
+            except json.JSONDecodeError:
+                print(f"WARNING: The configuration file '{CONFIG_FILE}' is corrupt or empty. Resetting to default configuration.")
+        self.save_config(default_config)
+        return default_config
 
-                async with self.session.get(url) as response:
-
-                    print("API Status:", response.status)
-
-                    if response.status == 429:
-                        print("Rate Limited — Retrying...")
-                        await asyncio.sleep(3)
-                        continue
-
-                    if response.status != 200:
-                        text = await response.text()
-                        print("API ERROR:", text)
-                        await asyncio.sleep(2)
-                        continue
-
-                    return await response.json()
-
-            except Exception as e:
-                print("Retry Error:", e)
-                await asyncio.sleep(2)
-
-        return None
-
+    def save_config(self, config_to_save=None):
+        data_to_save = config_to_save if config_to_save is not None else self.config_data
+        temp_file = CONFIG_FILE + ".tmp"
+        with open(temp_file, 'w') as f:
+            json.dump(data_to_save, f, indent=4)
+        os.replace(temp_file, CONFIG_FILE)
 
     async def check_channel(self, ctx):
         if ctx.guild is None:
-            return False
+            return True
+        guild_id = str(ctx.guild.id)
+        like_channels = self.config_data["servers"].get(guild_id, {}).get("like_channels", [])
+        return not like_channels or str(ctx.channel.id) in like_channels
 
-        if ctx.guild.id != self.ALLOWED_SERVER_ID:
-            return False
+    async def cog_load(self):
+        pass
 
-        if ctx.channel.id != self.ALLOWED_CHANNEL_ID:
-            return False
+    @commands.hybrid_command(name="setlikechannel", description="Sets the channels where the /like command is allowed.")
+    @commands.has_permissions(administrator=True)
+    @app_commands.describe(channel="The channel to allow/disallow the /like command in.")
+    async def set_like_channel(self, ctx: commands.Context, channel: discord.TextChannel):
+        if ctx.guild is None:
+            await ctx.send("This command can only be used in a server.", ephemeral=True)
+            return
 
-        return True
+        guild_id = str(ctx.guild.id)
+        server_config = self.config_data["servers"].setdefault(guild_id, {})
+        like_channels = server_config.setdefault("like_channels", [])
 
+        channel_id_str = str(channel.id)
 
-    @commands.hybrid_command(name="like", description="Send Free Fire Likes")
+        if channel_id_str in like_channels:
+            like_channels.remove(channel_id_str)
+            self.save_config()
+            await ctx.send(f"✅ Channel {channel.mention} has been **removed** from allowed channels for /like commands. The command is now **disallowed** there.", ephemeral=True)
+        else:
+            like_channels.append(channel_id_str)
+            self.save_config()
+            await ctx.send(f"✅ Channel {channel.mention} is now **allowed** for /like commands. The command will **only** work in specified channels if any are set.", ephemeral=True)
+
+    @commands.hybrid_command(name="like", description="Sends likes to a Free Fire player")
+    @app_commands.describe(uid="Player UID (numbers only, minimum 6 characters)")
     async def like_command(self, ctx: commands.Context, uid: str):
-
         is_slash = ctx.interaction is not None
 
         if not await self.check_channel(ctx):
-            await ctx.reply(
-                "⚠️ This command only works in official SpectraX channel",
-                ephemeral=is_slash
-            )
+            msg = "This command is not available in this channel. Please use it in an authorized channel."
+            if is_slash:
+                await ctx.response.send_message(msg, ephemeral=True)
+            else:
+                await ctx.reply(msg, mention_author=False)
             return
 
-
-        # Cooldown
         user_id = ctx.author.id
         cooldown = 30
-
         if user_id in self.cooldowns:
-            last = self.cooldowns[user_id]
-            remaining = cooldown - (datetime.now() - last).seconds
-
+            last_used = self.cooldowns[user_id]
+            remaining = cooldown - (datetime.now() - last_used).seconds
             if remaining > 0:
-                await ctx.reply(
-                    f"⏳ Wait **{remaining}s**",
-                    ephemeral=is_slash
-                )
+                await ctx.send(f"Please wait {remaining} seconds before using this command again.", ephemeral=is_slash)
                 return
-
         self.cooldowns[user_id] = datetime.now()
 
-
-        # UID Check
-        if not uid.isdigit():
-            await ctx.reply(
-                "❌ Invalid UID",
-                ephemeral=is_slash
-            )
+        if not uid.isdigit() or len(uid) < 6:
+            await ctx.reply("Invalid UID. It must contain only numbers and be at least 6 characters long.", mention_author=False, ephemeral=is_slash)
             return
 
 
         try:
             async with ctx.typing():
+                async with self.session.get(f"{self.api_host}/like?uid={uid}", headers=self.headers) as response:
+                    if response.status == 404:
+                        await self._send_player_not_found(ctx, uid)
+                        return
+                    if response.status ==429 :
+                        await self._send_api_limit_reached
+                    if response.status != 200:
+                        print(f"API Error: {response.status} - {await response.text()}")
+                        await self._send_api_error(ctx)
+                        return
 
-                data = await self.fetch_api(
-                    f"{self.api_host}/like?uid={uid}"
-                )
-
-                if not data:
-                    await ctx.reply("⚠ API Not Responding")
-                    return
-
-
-                # Max Likes
-                if data.get("status") != 1:
+                    data = await response.json()
                     embed = discord.Embed(
-                        title="⚠️ SpectraX | Maximum Likes Reached",
-                        description="This UID already received maximum likes today.",
-                        color=0xff4757,
+                        title="FREE FIRE LIKE",
+                        color=0x2ECC71 if data.get("status") == 1 else 0xE74C3C,
                         timestamp=datetime.now()
                     )
 
-                    embed.add_field(
-                        name="✦ Player UID",
-                        value=f"`{uid}`",
-                        inline=False
-                    )
+                    if data.get("status") == 1:
+                        embed.description = (
+                            f"\n"
+                            f"┌  ACCOUNT\n"
+                            f"├─ NICKNAME: {data.get('player', 'Unknown')}\n"
+                            f"├─ UID: {uid}\n"
+                            f"└─ RESULT:\n"
+                            f"   ├─ ADDED: +{data.get('likes_added', 0)}\n"
+                            f"   ├─ BEFORE: {data.get('likes_before', 'N/A')}\n"
+                            f"   └─ AFTER: {data.get('likes_after', 'N/A')}\n"
+                        )
+                    else:
+                        embed.description = "\n┌MAX LIKES\n└─This UID has already received the maximum likes today.\n"
 
-                    embed.set_image(
-                        url="https://i.imgur.com/WEZ0Pbk.gif"
-                    )
-
-                    embed.set_footer(
-                        text="Developed by SpectraX-Community"
-                    )
-
-                    await ctx.reply(embed=embed)
-                    return
-
-
-                # Success Embed
-                embed = discord.Embed(
-                    title="✨⚡ SpectraX Likes Sent ⚡✨",
-                    description="💎 Free Fire Like System Activated",
-                    color=0x8A2BE2,
-                    timestamp=datetime.now()
-                )
-
-                embed.add_field(
-                    name="👤 Player Info",
-                    value=(
-                        f"✦ Nickname : `{data.get('PlayerNickname')}`\n"
-                        f"✦ UID : `{data.get('UID')}`\n"
-                        f"✦ Region : `{data.get('Region')}`"
-                    ),
-                    inline=False
-                )
-
-                embed.add_field(
-                    name="💖 Like Result",
-                    value=(
-                        f"✦ Before : `{data.get('LikesbeforeCommand')}`\n"
-                        f"✦ Added : `+{data.get('LikesGivenByAPI')}`\n"
-                        f"✦ After : `{data.get('LikesafterCommand')}`"
-                    ),
-                    inline=False
-                )
-
-                embed.set_thumbnail(
-                    url="https://i.imgur.com/WEZ0Pbk.png"
-                )
-
-                embed.set_image(
-                    url="https://i.imgur.com/oGVQjXn.gif"
-                )
-
-                embed.set_footer(
-                    text="✨ Developed by SpectraX Community"
-                )
-
-                await ctx.reply(
-                    embed=embed,
-                    mention_author=False
-                )
-
+                    embed.set_footer(text="DEVELOPED BY THUG")
+                    embed.description += "\n🔗 JOIN : https://discord.gg/awPm5B3QFg"
+                    await ctx.send(embed=embed, mention_author=True, ephemeral=is_slash)
 
         except asyncio.TimeoutError:
-            await ctx.reply("⚠ API Timeout")
-
+            await self._send_error_embed(ctx, "Timeout", "The server took too long to respond.", ephemeral=is_slash)
         except Exception as e:
-            print("ERROR:", e)
-            await ctx.reply("⚠ Unexpected Error")
+            print(f"Unexpected error in like_command: {e}")
+            await self._send_error_embed(ctx, "⚡ Critical Error", "An unexpected error occurred. Please try again later.", ephemeral=is_slash)
 
+    async def _send_player_not_found(self, ctx, uid):
+        embed = discord.Embed(title="❌ Player Not Found", description=f"The UID {uid} does not exist or is not accessible.", color=0xE74C3C)
+        embed.add_field(name="Tip", value="Make sure that:\n- The UID is correct\n- The player is not private", inline=False)
+        await ctx.send(embed=embed, ephemeral=True)
+        
+    async def _send_api_limit_reached(self, ctx):
+        embed = discord.Embed(
+            title="⚠️ API Rate Limit Reached",
+            description="You have reached the maximum number of requests allowed by the API.",
+            color=0xF1C40F  # jaune/orangé
+        )
+        embed.add_field(
+            name="Tip",
+            value=(
+                "- Wait a few minutes before trying again\n"
+                "- Consider upgrading your API plan if this happens often\n"
+                "- Avoid sending too many requests in a short time"
+            ),
+            inline=False
+        )
+        await ctx.send(embed=embed, ephemeral=True)
+
+
+    async def _send_api_error(self, ctx):
+        embed = discord.Embed(title="⚠️ Service Unavailable", description="The Free Fire API is not responding at the moment.", color=0xF39C12)
+        embed.add_field(name="Solution", value="Try again in a few minutes.", inline=False)
+        await ctx.send(embed=embed, ephemeral=True)
+
+    async def _send_error_embed(self, ctx, title, description, ephemeral=True):
+        embed = discord.Embed(title=f"❌ {title}", description=description, color=discord.Color.red(), timestamp=datetime.now())
+        embed.set_footer(text="An error occurred.")
+        await ctx.send(embed=embed, ephemeral=ephemeral)
 
     def cog_unload(self):
-        self.bot.loop.create_task(
-            self.session.close()
-        )
-
+        self.bot.loop.create_task(self.session.close())
 
 async def setup(bot):
     await bot.add_cog(LikeCommands(bot))
