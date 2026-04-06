@@ -17,43 +17,7 @@ class LikeCommands(commands.Cog):
         self.bot = bot
         self.api_host = "https://free-fire-like-api-bay.vercel.app"
         self.cooldowns = {}
-
-        self.session = aiohttp.ClientSession(
-            timeout=aiohttp.ClientTimeout(total=20),
-            headers={
-                "User-Agent": "Mozilla/5.0",
-                "Accept": "application/json"
-            }
-        )
-
-
-    async def fetch_api(self, url):
-        for _ in range(3):
-            try:
-                await asyncio.sleep(2)
-
-                async with self.session.get(url) as response:
-
-                    print("API Status:", response.status)
-
-                    if response.status == 429:
-                        print("Rate Limited   Retrying...")
-                        await asyncio.sleep(3)
-                        continue
-
-                    if response.status != 200:
-                        text = await response.text()
-                        print("API ERROR:", text)
-                        await asyncio.sleep(2)
-                        continue
-
-                    return await response.json()
-
-            except Exception as e:
-                print("Retry Error:", e)
-                await asyncio.sleep(2)
-
-        return None
+        self.session = aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=20))
 
 
     async def check_channel(self, ctx):
@@ -76,7 +40,7 @@ class LikeCommands(commands.Cog):
 
         if not await self.check_channel(ctx):
             await ctx.reply(
-                "?? This command only works in official SpectraX channel",
+                "⚠️ This command only works in official SpectraX channel",
                 ephemeral=is_slash
             )
             return
@@ -92,7 +56,7 @@ class LikeCommands(commands.Cog):
 
             if remaining > 0:
                 await ctx.reply(
-                    f"? Wait **{remaining}s**",
+                    f"⏳ Wait **{remaining}s**",
                     ephemeral=is_slash
                 )
                 return
@@ -103,7 +67,7 @@ class LikeCommands(commands.Cog):
         # UID Check
         if not uid.isdigit():
             await ctx.reply(
-                "? Invalid UID",
+                "❌ Invalid UID",
                 ephemeral=is_slash
             )
             return
@@ -112,94 +76,108 @@ class LikeCommands(commands.Cog):
         try:
             async with ctx.typing():
 
-                data = await self.fetch_api(
+                async with self.session.get(
                     f"{self.api_host}/like?uid={uid}"
-                )
+                ) as response:
 
-                if not data:
-                    await ctx.reply("? API Not Responding")
-                    return
+                    # Debug Print
+                    print("API Status:", response.status)
+
+                    if response.status != 200:
+                        error_text = await response.text()
+
+                        embed = discord.Embed(
+                            title="⚠ API Error",
+                            description=f"Status: {response.status}",
+                            color=0xff0000
+                        )
+
+                        await ctx.reply(embed=embed)
+                        print("API ERROR:", error_text)
+                        return
 
 
-                # Max Likes
-                if data.get("status") != 1:
+                    data = await response.json()
+
+                    # Check API Status
+                    if data.get("status") != 1:
+                        embed = discord.Embed(
+                            title="⚠️ SpectraX | Maximum Likes Reached",
+                            description="This UID already received maximum likes today.",
+                            color=0xff4757,
+                            timestamp=datetime.now()
+                        )
+
+                        embed.add_field(
+                            name="✦ Player UID",
+                            value=f"`{uid}`",
+                            inline=False
+                        )
+
+                        embed.set_image(
+                            url="https://i.imgur.com/WEZ0Pbk.gif"
+                        )
+
+                        embed.set_footer(
+                            text="Developed by SpectraX-Community"
+                        )
+
+                        await ctx.reply(embed=embed)
+                        return
+
+
+                    # Success Embed
                     embed = discord.Embed(
-                        title="?? SpectraX | Maximum Likes Reached",
-                        description="This UID already received maximum likes today.",
-                        color=0xff4757,
+                        title="✨⚡ SpectraX Likes Sent ⚡✨",
+                        description="💎 Free Fire Like System Activated",
+                        color=0x8A2BE2,
                         timestamp=datetime.now()
                     )
 
                     embed.add_field(
-                        name="? Player UID",
-                        value=f"`{uid}`",
+                        name="👤 Player Info",
+                        value=(
+                            f"✦ Nickname : `{data.get('PlayerNickname')}`\n"
+                            f"✦ UID : `{data.get('UID')}`\n"
+                            f"✦ Region : `{data.get('Region')}`"
+                        ),
                         inline=False
                     )
 
+                    embed.add_field(
+                        name="💖 Like Result",
+                        value=(
+                            f"✦ Before : `{data.get('LikesbeforeCommand')}`\n"
+                            f"✦ Added : `+{data.get('LikesGivenByAPI')}`\n"
+                            f"✦ After : `{data.get('LikesafterCommand')}`"
+                        ),
+                        inline=False
+                    )
+
+                    embed.set_thumbnail(
+                        url="https://i.imgur.com/WEZ0Pbk.png"
+                    )
+
                     embed.set_image(
-                        url="https://i.imgur.com/WEZ0Pbk.gif"
+                        url="https://i.imgur.com/oGVQjXn.gif"
                     )
 
                     embed.set_footer(
-                        text="Developed by SpectraX-Community"
+                        text="✨ Developed by SpectraX Community"
                     )
 
-                    await ctx.reply(embed=embed)
-                    return
-
-
-                # Success Embed
-                embed = discord.Embed(
-                    title="?? SpectraX Likes Sent ??",
-                    description="?? Free Fire Like System Activated",
-                    color=0x8A2BE2,
-                    timestamp=datetime.now()
-                )
-
-                embed.add_field(
-                    name="?? Player Info",
-                    value=(
-                        f"? Nickname : `{data.get('PlayerNickname')}`\n"
-                        f"? UID : `{data.get('UID')}`\n"
-                        f"? Region : `{data.get('Region')}`"
-                    ),
-                    inline=False
-                )
-
-                embed.add_field(
-                    name="?? Like Result",
-                    value=(
-                        f"? Before : `{data.get('LikesbeforeCommand')}`\n"
-                        f"? Added : `+{data.get('LikesGivenByAPI')}`\n"
-                        f"? After : `{data.get('LikesafterCommand')}`"
-                    ),
-                    inline=False
-                )
-
-                embed.set_thumbnail(
-                    url="https://i.imgur.com/WEZ0Pbk.png"
-                )
-
-                embed.set_image(
-                    url="https://i.imgur.com/oGVQjXn.gif"
-                )
-
-                embed.set_footer(
-                    text="? Developed by SpectraX Community"
-                )
-
-                await ctx.reply(
-                    embed=embed,
-                    mention_author=False
-                )
+                    await ctx.reply(
+                        embed=embed,
+                        mention_author=False
+                    )
 
 
         except asyncio.TimeoutError:
-            await ctx.reply("? API Timeout")
+            await ctx.reply("⚠ API Timeout")
 
         except Exception as e:
             print("ERROR:", e)
-            await ctx.reply("? Unexpected Error")
+            await ctx.reply("⚠ Unexpected Error")
 
 
     def cog_unload(self):
