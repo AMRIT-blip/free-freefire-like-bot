@@ -17,7 +17,43 @@ class LikeCommands(commands.Cog):
         self.bot = bot
         self.api_host = "https://free-fire-like-api-bay.vercel.app"
         self.cooldowns = {}
-        self.session = aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=20))
+
+        self.session = aiohttp.ClientSession(
+            timeout=aiohttp.ClientTimeout(total=20),
+            headers={
+                "User-Agent": "Mozilla/5.0",
+                "Accept": "application/json"
+            }
+        )
+
+
+    async def fetch_api(self, url):
+        for _ in range(3):
+            try:
+                await asyncio.sleep(2)
+
+                async with self.session.get(url) as response:
+
+                    print("API Status:", response.status)
+
+                    if response.status == 429:
+                        print("Rate Limited — Retrying...")
+                        await asyncio.sleep(3)
+                        continue
+
+                    if response.status != 200:
+                        text = await response.text()
+                        print("API ERROR:", text)
+                        await asyncio.sleep(2)
+                        continue
+
+                    return await response.json()
+
+            except Exception as e:
+                print("Retry Error:", e)
+                await asyncio.sleep(2)
+
+        return None
 
 
     async def check_channel(self, ctx):
@@ -76,100 +112,86 @@ class LikeCommands(commands.Cog):
         try:
             async with ctx.typing():
 
-                async with self.session.get(
+                data = await self.fetch_api(
                     f"{self.api_host}/like?uid={uid}"
-                ) as response:
+                )
 
-                    # Debug Print
-                    print("API Status:", response.status)
-
-                    if response.status != 200:
-                        error_text = await response.text()
-
-                        embed = discord.Embed(
-                            title="⚠ API Error",
-                            description=f"Status: {response.status}",
-                            color=0xff0000
-                        )
-
-                        await ctx.reply(embed=embed)
-                        print("API ERROR:", error_text)
-                        return
+                if not data:
+                    await ctx.reply("⚠ API Not Responding")
+                    return
 
 
-                    data = await response.json()
-
-                    # Check API Status
-                    if data.get("status") != 1:
-                        embed = discord.Embed(
-                            title="⚠️ SpectraX | Maximum Likes Reached",
-                            description="This UID already received maximum likes today.",
-                            color=0xff4757,
-                            timestamp=datetime.now()
-                        )
-
-                        embed.add_field(
-                            name="✦ Player UID",
-                            value=f"`{uid}`",
-                            inline=False
-                        )
-
-                        embed.set_image(
-                            url="https://i.imgur.com/WEZ0Pbk.gif"
-                        )
-
-                        embed.set_footer(
-                            text="Developed by SpectraX-Community"
-                        )
-
-                        await ctx.reply(embed=embed)
-                        return
-
-
-                    # Success Embed
+                # Max Likes
+                if data.get("status") != 1:
                     embed = discord.Embed(
-                        title="✨⚡ SpectraX Likes Sent ⚡✨",
-                        description="💎 Free Fire Like System Activated",
-                        color=0x8A2BE2,
+                        title="⚠️ SpectraX | Maximum Likes Reached",
+                        description="This UID already received maximum likes today.",
+                        color=0xff4757,
                         timestamp=datetime.now()
                     )
 
                     embed.add_field(
-                        name="👤 Player Info",
-                        value=(
-                            f"✦ Nickname : `{data.get('PlayerNickname')}`\n"
-                            f"✦ UID : `{data.get('UID')}`\n"
-                            f"✦ Region : `{data.get('Region')}`"
-                        ),
+                        name="✦ Player UID",
+                        value=f"`{uid}`",
                         inline=False
-                    )
-
-                    embed.add_field(
-                        name="💖 Like Result",
-                        value=(
-                            f"✦ Before : `{data.get('LikesbeforeCommand')}`\n"
-                            f"✦ Added : `+{data.get('LikesGivenByAPI')}`\n"
-                            f"✦ After : `{data.get('LikesafterCommand')}`"
-                        ),
-                        inline=False
-                    )
-
-                    embed.set_thumbnail(
-                        url="https://i.imgur.com/WEZ0Pbk.png"
                     )
 
                     embed.set_image(
-                        url="https://i.imgur.com/oGVQjXn.gif"
+                        url="https://i.imgur.com/WEZ0Pbk.gif"
                     )
 
                     embed.set_footer(
-                        text="✨ Developed by SpectraX Community"
+                        text="Developed by SpectraX-Community"
                     )
 
-                    await ctx.reply(
-                        embed=embed,
-                        mention_author=False
-                    )
+                    await ctx.reply(embed=embed)
+                    return
+
+
+                # Success Embed
+                embed = discord.Embed(
+                    title="✨⚡ SpectraX Likes Sent ⚡✨",
+                    description="💎 Free Fire Like System Activated",
+                    color=0x8A2BE2,
+                    timestamp=datetime.now()
+                )
+
+                embed.add_field(
+                    name="👤 Player Info",
+                    value=(
+                        f"✦ Nickname : `{data.get('PlayerNickname')}`\n"
+                        f"✦ UID : `{data.get('UID')}`\n"
+                        f"✦ Region : `{data.get('Region')}`"
+                    ),
+                    inline=False
+                )
+
+                embed.add_field(
+                    name="💖 Like Result",
+                    value=(
+                        f"✦ Before : `{data.get('LikesbeforeCommand')}`\n"
+                        f"✦ Added : `+{data.get('LikesGivenByAPI')}`\n"
+                        f"✦ After : `{data.get('LikesafterCommand')}`"
+                    ),
+                    inline=False
+                )
+
+                embed.set_thumbnail(
+                    url="https://i.imgur.com/WEZ0Pbk.png"
+                )
+
+                embed.set_image(
+                    url="https://i.imgur.com/oGVQjXn.gif"
+                )
+
+                embed.set_footer(
+                    text="✨ Developed by SpectraX Community"
+                )
+
+                await ctx.reply(
+                    embed=embed,
+                    mention_author=False
+                )
 
 
         except asyncio.TimeoutError:
