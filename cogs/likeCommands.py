@@ -15,7 +15,7 @@ class LikeCommands(commands.Cog):
 
     def __init__(self, bot):
         self.bot = bot
-        self.api_host = "https://free-fire-like-api-bay.vercel.app"
+        self.api_host = "https://free-fire-like-api-woad-six.vercel.app"
         self.cooldowns = {}
         self.session = aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=20))
 
