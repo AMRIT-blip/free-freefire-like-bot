@@ -13,21 +13,20 @@ from dotenv import load_dotenv
 
 app = Flask(__name__)
 bot_name = "None"
+bot_status = "Starting"
 
 
 
 @app.route('/')
 def home():
-    return f"Bot {bot_name} is active"
+    # Keep the web service healthy for Render while exposing the bot status.
+    return f"Bot status: {bot_status} ({bot_name})", 200
 
 
 def run_flask():
     port = int(os.environ.get("PORT", 10000))
-    if os.name == 'nt':
-        from waitress import serve
-        serve(app, host="0.0.0.0", port=port)
-    else:
-        app.run(host='0.0.0.0', port=port)
+    from waitress import serve
+    serve(app, host="0.0.0.0", port=port)
 
 
 flask_thread = threading.Thread(target=run_flask, daemon=True)
@@ -68,7 +67,7 @@ class Seemu(commands.Bot):
         self.update_activity_task.start()
 
     async def on_ready(self):
-        global bot_name
+        global bot_name, bot_status
         if not self.initialized:
             return
 
@@ -76,8 +75,24 @@ class Seemu(commands.Bot):
         activity = discord.Game(name=f"Sharing likes on {server_count} servers")
         await self.change_presence(activity=activity)
         bot_name = f"{self.user}"
+        bot_status = "Connected"
         print(f"\n🔗 Connected as {bot_name}")
         print(f"🌐 Flask running on port {os.environ.get('PORT', 10000)}\n")
+
+    async def on_connect(self):
+        global bot_status
+        bot_status = "Connected to Discord gateway; waiting for ready"
+        print("✅ Connected to Discord gateway; waiting for bot ready event.")
+
+    async def on_disconnect(self):
+        global bot_status
+        bot_status = "Disconnected from Discord"
+        print("⚠️ Disconnected from Discord; waiting for discord.py to reconnect.")
+
+    async def on_resumed(self):
+        global bot_status
+        bot_status = "Connected"
+        print("✅ Discord connection resumed")
 
     @tasks.loop(minutes=5) 
     
@@ -132,6 +147,7 @@ class Seemu(commands.Bot):
 
 
 if __name__ == "__main__":
+    bot_status = "Connecting to Discord"
     retry_delay = 15 * 60
 
     while True:
@@ -148,6 +164,7 @@ if __name__ == "__main__":
             # can repeat the login request and prolong the block, so retry slowly.
             response_text = str(getattr(e, "text", ""))
             if e.status == 429 and ("1015" in response_text or "cloudflare" in response_text.lower()):
+                bot_status = "Discord temporarily rate-limited this host"
                 print(
                     f"⚠️ Discord/Cloudflare rate-limited this connection (HTTP 429, 1015). "
                     f"Check that only one instance uses this token. Retrying in {retry_delay // 60} minutes."
