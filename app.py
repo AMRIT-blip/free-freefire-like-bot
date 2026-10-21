@@ -10,6 +10,10 @@ import time
 
 from dotenv import load_dotenv
 
+# Render captures stdout through a pipe; line buffering makes print() diagnostics
+# visible immediately instead of leaving them hidden while the process waits.
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(line_buffering=True)
 
 app = Flask(__name__)
 bot_name = "None"
@@ -51,16 +55,22 @@ class Seemu(commands.Bot):
         self.initialized = False
 
     async def setup_hook(self) -> None:
+        global bot_status
+        bot_status = "Discord login accepted; initializing bot"
+        print("✅ Discord login accepted; initializing bot.")
         self.session = aiohttp.ClientSession()
 
         for ext in extensions:
             try:
+                print(f"Loading extension: {ext}")
                 await self.load_extension(ext)
                 print(f"✅ {ext} loaded successfully")
             except Exception as e:
                 print(f"❌ Failed to load {ext}: {e}")
                 traceback.print_exc()
 
+        bot_status = "Syncing slash commands"
+        print("Syncing slash commands with Discord...")
         await self.tree.sync()
         print("✔ All cogs loaded")
         self.initialized = True
