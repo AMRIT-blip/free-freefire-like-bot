@@ -6,6 +6,7 @@ from flask import Flask
 import threading
 import sys
 import aiohttp
+import time
 
 from dotenv import load_dotenv
 
@@ -131,17 +132,36 @@ class Seemu(commands.Bot):
 
 
 if __name__ == "__main__":
-    try:
-        intents = discord.Intents.all()
-        bot = Seemu(command_prefix="!", intents=intents)
-        bot.run(TOKEN)
-    except discord.errors.LoginFailure:
-        print("❌ Invalid Discord token")
-        sys.exit(1)
-    except KeyboardInterrupt:
-        print("\n🛑 Stopping bot...")
-        sys.exit(0)
-    except Exception as e:
-        print(f"⚠️ Unexpected error: {e}")
-        traceback.print_exc()
-        sys.exit(1)
+    retry_delay = 15 * 60
+
+    while True:
+        try:
+            intents = discord.Intents.all()
+            bot = Seemu(command_prefix="!", intents=intents)
+            bot.run(TOKEN)
+            break
+        except discord.errors.LoginFailure:
+            print("❌ Discord rejected the bot token. Check the TOKEN environment variable.")
+            sys.exit(1)
+        except discord.HTTPException as e:
+            # Cloudflare 1015 is an IP-based rate limit. Rapid Render restarts
+            # can repeat the login request and prolong the block, so retry slowly.
+            response_text = str(getattr(e, "text", ""))
+            if e.status == 429 and ("1015" in response_text or "cloudflare" in response_text.lower()):
+                print(
+                    f"⚠️ Discord/Cloudflare rate-limited this connection (HTTP 429, 1015). "
+                    f"Check that only one instance uses this token. Retrying in {retry_delay // 60} minutes."
+                )
+                time.sleep(retry_delay)
+                retry_delay = min(retry_delay * 2, 60 * 60)
+                continue
+            print(f"⚠️ Discord HTTP error (status {e.status}): {e}")
+            traceback.print_exc()
+            sys.exit(1)
+        except KeyboardInterrupt:
+            print("\n🛑 Stopping bot...")
+            sys.exit(0)
+        except Exception as e:
+            print(f"⚠️ Unexpected error: {e}")
+            traceback.print_exc()
+            sys.exit(1)
